@@ -34,7 +34,9 @@ import SwiftUI
 
 struct ContentView: View {
   @StateObject var game = GuessingGame()
+  @State private var showResults = false
   @State private var showStats = false
+  @Environment(\.scenePhase) var scenePhase
 
   var body: some View {
     VStack {
@@ -45,6 +47,29 @@ struct ContentView: View {
       KeyboardView(game: game)
         .padding(5)
       ActionBarView(showStats: $showStats, game: game)
+    }
+    .sheet(isPresented: $showResults) {
+      GameResultView(game: game)
+    }
+    .sheet(isPresented: $showStats) {
+      StatisticsView(stats: GameStatistics(gameRecord: game.gameRecord))
+    }
+    .onChange(of: game.status) { newStatus in
+      if newStatus == .won || newStatus == .lost {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+          showResults = true
+        }
+      }
+    }
+    .onChange(of: scenePhase) { newPhase in
+      if newPhase == .active {
+        if game.status == .new && !game.gameState.isEmpty {
+          game.loadState()
+        }
+      }
+      if newPhase == .background || newPhase == .inactive {
+        game.saveState()
+      }
     }
     .frame(alignment: .top)
     .padding([.bottom], 10)

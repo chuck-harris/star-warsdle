@@ -45,10 +45,18 @@ class GuessingGame: ObservableObject {
   let wordLength = 5
   let maxGuesses = 6
   var dictionary: Dictionary
-  var status: GameState = .initializing
+  var status: GameState = .initializing {
+    didSet {
+      if status == .lost || status == .won {
+        gameState = ""
+      }
+    }
+  }
   @Published var targetWord: String
   @Published var currentGuess = 0
   @Published var guesses: [Guess]
+  @AppStorage("GameRecord") var gameRecord = ""
+  @AppStorage("GameState") var gameState = ""
   
   init() {
     dictionary = Dictionary(length: wordLength)
@@ -130,6 +138,7 @@ class GuessingGame: ObservableObject {
     
     if targetWord == guesses[currentGuess].letters {
       status = .won
+      gameRecord += "\(currentGuess + 1)"
       return
     }
     
@@ -139,6 +148,7 @@ class GuessingGame: ObservableObject {
     }
     else {
       status = .lost
+      gameRecord += "L"
     }
   }
   
@@ -152,6 +162,108 @@ class GuessingGame: ObservableObject {
     guesses = []
     guesses.append(Guess())
     status = .new
+  }
+  
+  func statusForLetter(letter: String) -> LetterStatus {
+    if letter == "<" || letter == ">" {
+      return .unknown
+    }
+    
+    let finishedGuesses = guesses.filter { $0.status == .complete }
+    let guessedLetters = finishedGuesses.reduce([LetterStatus]()) { partialResult, guess in
+      let guessStatuses = guess.word.filter { $0.letter == letter }.map { $0.status }
+      var currentStatuses = partialResult
+      currentStatuses.append(contentsOf: guessStatuses)
+      return currentStatuses
+    }
+    
+    if guessedLetters.contains(.inPosition) {
+      return .inPosition
+    }
+    if guessedLetters.contains(.notInPosistion) {
+      return .notInPosistion
+    }
+    if guessedLetters.contains(.notInWord) {
+      return .notInWord
+    }
+    
+    return .unknown
+  }
+  
+  func colorForKey(key: String) -> Color {
+    let status = statusForLetter(letter: key)
+    
+    switch status {
+    case .unknown:
+      return Color(UIColor.systemBackground)
+    case .inPosition:
+      return Color.green
+    case .notInPosistion:
+      return Color.yellow
+    case .notInWord:
+      return Color.gray.opacity(0.67)
+    }
+  }
+  
+  var shareResultText: String? {
+    guard status == .won || status == .lost else { return nil }
+    
+    let yellowBox = "\u{1F7E8}"
+    let greenBox = "\u{1F7E9}"
+    let grayBox = "\u{2B1B}"
+    
+    var text = "Star Warsdle\n"
+    if status == .won {
+      text += "Turn \(currentGuess + 1)/\(maxGuesses)\n"
+    }
+    else {
+      text += "Turn X/\(maxGuesses)\n"
+    }
+    
+    var statusString = ""
+    for guess in guesses {
+      var nextStatus = ""
+      for guessedLetter in guess.word {
+        switch guessedLetter.status {
+        case .inPosition :
+          nextStatus += greenBox
+        case .notInPosistion:
+          nextStatus += yellowBox
+        default:
+          nextStatus += grayBox
+        }
+        nextStatus += " "
+      }
+      statusString += nextStatus + "\n"
+    }
+    
+    return text + statusString
+  }
+  
+  func saveState() {
+    let guessList = guesses.map { $0.status == .complete ? "\($0.letters)>" : $0.letters}
+    let guessedKeys = guessList.joined()
+    gameState = "\(targetWord)|\(guessedKeys)"
+    print("Saving current game state: \(gameState)")
+  }
+  
+  func loadState() {
+    print("Loading game state: \(gameState)")
+    currentGuess = 0
+    guesses = .init()
+    guesses.append(Guess())
+    status = .inProgress
+    
+    let stateParts = gameState.split(separator: "|")
+    targetWord = String(stateParts[0])
+    guard stateParts.count > 1 else { return }
+    let guessList = String(stateParts[1])
+    
+    let letters = Array(guessList)
+    for letter in letters {
+      let newGuess = String(letter)
+      addKey(letter: newGuess)
+    }
   }
 }
 

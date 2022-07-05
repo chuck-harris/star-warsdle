@@ -46,6 +46,15 @@ struct GuessBoxView: View {
       .frame(width: size, height: size)
       .background(letter.statusColor)
       .cornerRadius(size / 5.0)
+      .rotation3DEffect(
+        .degrees(
+          letter.status == .unknown ? 0 : 180),
+        axis: (x: 0.0, y: 1.0, z: 0.0)
+      )
+      .animation(
+        .linear(duration: 1.0),
+        value: letter.status
+      )
   }
 }
 
